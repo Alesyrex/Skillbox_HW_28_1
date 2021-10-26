@@ -1,15 +1,21 @@
 #include <iostream>
+#include <map>
+#include <string>
 #include <thread>
 #include <chrono>
 #include <vector>
 #include <algorithm>
+#include <mutex>
+
+std::map<int,std::string> final_result;
+std::mutex mtx;
 
 class Swimmer
 {
     int swimmerID;
     std::string name = "unknown";
-    double speed;
     int result;
+    double speed;
     double distance;
 
 public:
@@ -32,8 +38,6 @@ public:
         }
     }
     double getDistance() {return distance;}
-    int getSwimmerID() {return swimmerID;}
-    double getSpeed() {return speed;}
     std::string getName() {return name;}
     int getResult() {return result;}
     void setResult() {result++;}
@@ -44,32 +48,32 @@ public:
     }
 };
 
-void swim(double distanceLength, Swimmer *swimmer)
+void swim(double distanceLength, Swimmer &swimmer)
 {
-    while (swimmer->getDistance() < distanceLength)
+    while (swimmer.getDistance() < distanceLength)
     {
         std::this_thread::sleep_for(std::chrono::seconds(1));
-        swimmer->setDistance(distanceLength);
-        swimmer->setResult();
-        std::cout << "Swimmer " << swimmer->getName() << " swam " << swimmer->getDistance() << " meters." << std::endl;
+        swimmer.setDistance(distanceLength);
+        swimmer.setResult();
+        mtx.lock();
+        std::cout << "Swimmer " << swimmer.getName() << " swam " << swimmer.getDistance() << " meters." << std::endl;
+        mtx.unlock();
     }
-}
-
-bool comp (Swimmer *a, Swimmer *b)
-{
-    return (a->getResult() < b->getResult());
+    mtx.lock();
+    final_result.insert(std::pair<int,std::string>(swimmer.getResult(),swimmer.getName()));
+    mtx.unlock();
 }
 
 int main() {
 
     const double distanceLength = 30;
-    const int countSwimmer = 3;
-    std::vector<Swimmer*> swimmers;
+    const int countSwimmer = 4;
+    std::vector<Swimmer> swimmers;
     std::vector<std::thread> swimThr;
 
     for (int i=0;i < countSwimmer;++i)
     {
-        swimmers.push_back(new Swimmer(i+1));
+        swimmers.push_back(Swimmer(i+1));
     }
     for (int i=0;i < countSwimmer;++i)
     {
@@ -81,10 +85,9 @@ int main() {
         i.join();
     }
 
-    sort (swimmers.begin(), swimmers.end(), comp);
-    for (int i=0;i < countSwimmer;++i)
+    for (auto it = final_result.begin();it != final_result.end();++it)
     {
-        std::cout << i+1 << ". " << swimmers[i]->getName() << "\t\tresult: " << swimmers[i]->getResult() << " sec." << std::endl;
+        std::cout << it->second << "\tresult: " << it->first << " sec." << std::endl;
     }
 
     return 0;
